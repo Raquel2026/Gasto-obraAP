@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Controle de Gastos</title>
+    <link rel="stylesheet" href="index.css" />
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#cf85c4">
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <h1>Gastos da Obra</h1>
+
+            <input type="text" id="descricao" placeholder="Descrição">
+            <textarea id="informacao" placeholder="Informações adicionais (opcional)" rows="3"></textarea>
+            <input type="number" id="valor" placeholder="Valor">
+
+            <select id="tipo">
+                <option value="material">Material</option>
+                <option value="maoDeObra">Mão de obra</option>
+            </select>
+
+            <button onclick="adicionarGasto()">Adicionar</button>
+        </header>
+
+        <hr>
+
+        <section id="listaDeGastos">
+            <ul id="lista"></ul>
+        </section>
+
+        <section id="totais">
+            <h3>Total Material: R$ <span id="totalMaterial">0</span></h3>
+            <h3>Total Mão de Obra: R$ <span id="totalMaoDeObra">0</span></h3>
+        </section>
+
+        <section id="totalGeral">
+            <h2>Total: R$ <span id="total">0</span></h2>
+        </section>
+
+
+
+
+        <script>
+
+            let gastos = [];
+            let editandoId = null;
+
+            function salvarDados() {
+                localStorage.setItem("gastos", JSON.stringify(gastos));
+            }
+
+            function carregarDados() {
+                const dadosSalvos = localStorage.getItem("gastos");
+
+                if (dadosSalvos) {
+                    gastos = JSON.parse(dadosSalvos);
+                    atualizarTela();
+                }
+            }
+
+            function adicionarGasto() {
+                const informacao = document.getElementById("informacao").value;
+                const tipo = document.getElementById("tipo").value;
+                const descricao = document.getElementById("descricao").value;
+                const valor = Number(document.getElementById("valor").value);
+
+                if (!descricao || !valor) {
+                    alert("Preencha os campos!");
+                    return;
+                }
+
+                if (editandoId) {
+                    const gasto = gastos.find(g => g.id === editandoId);
+
+                    gasto.descricao = descricao;
+                    gasto.valor = valor;
+                    gasto.informacao = informacao;
+                    gasto.tipo = tipo;
+
+                    editandoId = null;
+                }
+
+                else {
+                    const gasto = {
+                        id: Date.now(),
+                        descricao,
+                        valor,
+                        tipo,
+                        informacao
+                    };
+
+                    gastos.push(gasto);
+                }
+                salvarDados();
+                atualizarTela();
+
+                document.getElementById("descricao").value = "";
+                document.getElementById("valor").value = "";
+                document.getElementById("informacao").value = "";
+            }
+
+            function atualizarTela() {
+                const lista = document.getElementById("lista");
+
+                lista.innerHTML = "";
+
+                let total = 0;
+                let totalMaterial = 0;
+                let totalMaoDeObra = 0;
+
+                gastos.forEach(g => {
+                    const li = document.createElement("li");
+                    li.className = g.tipo;
+
+                    li.innerHTML = `
+      ${g.descricao} - R$ ${g.valor}
+      <br>
+      <p class="tipo-texto">
+      ${g.tipo === "material" ? "Material" : "Mão de obra"}  
+      </p>
+      <br>
+      ${g.informacao || ""}
+      <div class="botoes">
+      <button onclick="editarGasto(${g.id})">Editar</button>
+      <button onclick="excluirGasto(${g.id})">Excluir</button>
+      </div>
+      `;
+
+                    lista.appendChild(li);
+
+                    total += g.valor;
+
+                    if (g.tipo === "material") {
+                        totalMaterial += g.valor;
+                    }
+                    else if (g.tipo === "maoDeObra") {
+                        totalMaoDeObra += g.valor;
+                    }
+                });
+
+                document.getElementById("total").textContent = total;
+                document.getElementById("totalMaterial").textContent = totalMaterial;
+                document.getElementById("totalMaoDeObra").textContent = totalMaoDeObra;
+            }
+            carregarDados();
+
+            function excluirGasto(id) {
+                const confirmar = confirm("Tem certeza que deseja excluir?");
+
+                if (!confirmar) return;
+
+                gastos = gastos.filter(g => g.id !== id);
+
+                salvarDados();
+                atualizarTela();
+            }
+
+            function editarGasto(id) {
+                const gasto = gastos.find(g => g.id === id);
+
+                document.getElementById("descricao").value = gasto.descricao;
+                document.getElementById("valor").value = gasto.valor;
+                document.getElementById("informacao").value = gasto.informacao;
+
+                editandoId = id;
+            }
+
+            function exportarBackup() {
+                const dados = JSON.stringify(gastos, null, 2);
+                const blob = new Blob([dados], { type: "application/json" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = "backup_gastos.json";
+                a.click();
+
+                URL.revokeObjectURL(url);
+            }
+
+            function importarBackup(event) {
+                const arquivo = event.target.files[0];
+
+                if (!arquivo) return;
+
+                const leitor = new FileReader();
+
+                leitor.onload = function (e) {
+                    const conteudo = e.target.result;
+
+                    try {
+                        gastos = JSON.parse(conteudo);
+
+                        salvarDados();
+                        atualizarTela();
+
+                        alert("Backup carregado com sucesso!");
+                    }
+
+                    catch (erro) {
+                        alert("Erro ao carregar backup!");
+                    }
+                };
+
+                leitor.readAsText(arquivo);
+            }
+            if ("serviceWorker" in navigator) {
+                navigator.serviceWorker.register("sw.js");
+            }
+        </script>
+
+        <section id="backup">
+            <input type="file" onchange="importarBackup(event)">
+            <button onclick="exportarBackup()">Exportar Backup</button>
+        </section>
+
+    </div>
+
+
+
+
+    <footer>
+        <p>Feito por Raquel e IA <img id="icon" src="icone.webp"></p>
+        <a href="https://WA.me/+55093992391136">Telefone para contato: 93 992391136</a>
+    </footer>
+
+
+</body>
+
+</html>
